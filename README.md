@@ -2,7 +2,12 @@
 
 A two-deck DJ set that runs in the browser and is played with your hands. The laptop camera
 shows you as a mirror, the DJ rig is drawn on top, and you work it the way you would work real
-gear. No install; Windows and Mac; Chrome or Edge.
+gear.
+
+## ▶ Play it here: <https://sinansahincandan.github.io/dj-set/>
+
+Open the link in Chrome or Edge on a Windows or Mac laptop, press **Start with camera** and
+allow the camera. That is all: nothing to download, nothing to install.
 
 ## How to play
 
@@ -31,25 +36,6 @@ again to stop: the file lands in your Downloads folder (MP4 where the browser ca
 otherwise WebM). The sound is taken straight from the mixer, so it is clean, and the microphone
 is never used.
 
-## Run it locally
-
-The camera only works on `https://` or `localhost`, so opening `index.html` by double-click is
-not enough. From this folder:
-
-```bash
-python3 -m http.server 5173
-```
-
-then open <http://localhost:5173> in Chrome or Edge.
-
-## Put it online
-
-It is a plain static folder, so any static host gives you a link to share.
-
-- **Netlify Drop**: open <https://app.netlify.com/drop> and drag this folder onto the page.
-- **GitHub Pages**: push the folder to a GitHub repository, then Settings → Pages → deploy from
-  the `main` branch, root folder.
-
 ## Notes
 
 - Hand tracking uses MediaPipe Hand Landmarker, loaded from jsDelivr and Google's model storage
@@ -58,3 +44,20 @@ It is a plain static folder, so any static host gives you a link to share.
 - Audio is the Web Audio API; each deck is an AudioWorklet that can play at any speed in either
   direction, which is what makes scratching work.
 - `SPEC.md` describes how the modules fit together.
+
+## For developers only
+
+You do not need any of this to play; use the link at the top. This part is for changing the
+code.
+
+The site is this folder served as plain static files by GitHub Pages from the `main` branch;
+pushing to `main` updates the link above. To try changes on your own computer before pushing,
+serve the folder (the camera needs `https://` or `localhost`, so double-clicking `index.html`
+is not enough):
+
+```bash
+python3 -m http.server 5173
+```
+
+and open <http://localhost:5173>. `5173` is just a port number for that local test server,
+not something to download.
