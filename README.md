@@ -1,4 +1,4 @@
-# Ozge DJ Set
+# DJ Set
 
 A two-deck DJ set that runs in the browser and is played with your hands. The laptop camera
 shows you as a mirror, the DJ rig is drawn on top, and you work it the way you would work real
