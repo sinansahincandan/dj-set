@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OZGE DJ SET</title>
+  <meta name="description" content="A DJ set in your browser, played with your hands in front of the camera.">
+  <meta name="theme-color" content="#07080d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%2307080d' stroke='%232ee6ff' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='10' fill='%23ff4d9d'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="js/ui/controls.css">
+</head>
+<body class="mode-idle">
+
+<!-- ───────────── Stage layers (bottom to top) ───────────── -->
+<video id="cam" playsinline muted autoplay aria-hidden="true"></video>
+<div id="dim" aria-hidden="true"></div>
+
+<header id="topbar">
+  <div class="brand" aria-label="Ozge DJ set"><span class="brand-a">OZGE</span> <span class="brand-b">DJ</span> SET</div>
+  <div id="status" class="chip" data-state="idle" role="status" aria-live="polite">
+    <i class="dot" aria-hidden="true"></i><span id="statusText">Not started</span>
+  </div>
+  <div class="topbar-actions">
+    <button type="button" class="btn ghost rec" id="btnRec" aria-haspopup="menu" aria-expanded="false" aria-controls="recMenu" title="Record your set" disabled>
+      <i class="rec-dot" aria-hidden="true"></i><span>REC</span><span class="rec-time" id="recTime" hidden>0:00</span>
+    </button>
+    <button type="button" class="btn ghost" id="btnHelp">Help</button>
+    <button type="button" class="btn ghost" id="btnSettings" aria-expanded="false" aria-controls="settings">Settings</button>
+  </div>
+</header>
+
+<!-- The rig: every hand-operated control lives here (top ~73 % of the window). -->
+<main id="rig" aria-label="DJ rig">
+  <section class="deck deck-a tone-a" id="deckA" data-deck="A" aria-label="Deck A">
+    <div class="deck-top">
+      <div class="cell cell-tempo" data-slot="A-tempo"></div>
+      <div class="platter-area"><div class="cell cell-platter" data-slot="A-platter"></div></div>
+    </div>
+    <div class="deck-pads">
+      <div class="cell cell-pad" data-slot="A-pad-play"></div>
+      <div class="cell cell-pad" data-slot="A-pad-cue"></div>
+      <div class="cell cell-pad" data-slot="A-pad-sync"></div>
+      <div class="cell cell-pad" data-slot="A-pad-loop"></div>
+      <div class="cell cell-pad" data-slot="A-pad-hot-0"></div>
+      <div class="cell cell-pad" data-slot="A-pad-hot-1"></div>
+      <div class="cell cell-pad" data-slot="A-pad-hot-2"></div>
+      <div class="cell cell-pad" data-slot="A-pad-hot-3"></div>
+    </div>
+  </section>
+
+  <section class="mixer" id="mixer" aria-label="Mixer">
+    <div class="cell cell-fx" data-slot="fx" id="fxCell"></div>
+    <div class="mixer-strip">
+      <div class="cell cell-vol tone-a" data-slot="A-vol"></div>
+      <div class="knob-col tone-a">
+        <div class="cell cell-knob" data-slot="A-knob-high"></div>
+        <div class="cell cell-knob" data-slot="A-knob-mid"></div>
+        <div class="cell cell-knob" data-slot="A-knob-low"></div>
+        <div class="cell cell-knob" data-slot="A-knob-filter"></div>
+      </div>
+      <div class="knob-col tone-b">
+        <div class="cell cell-knob" data-slot="B-knob-high"></div>
+        <div class="cell cell-knob" data-slot="B-knob-mid"></div>
+        <div class="cell cell-knob" data-slot="B-knob-low"></div>
+        <div class="cell cell-knob" data-slot="B-knob-filter"></div>
+      </div>
+      <div class="cell cell-vol tone-b" data-slot="B-vol"></div>
+    </div>
+    <div class="xfade-row">
+      <span class="xf-tag tone-a" aria-hidden="true">A</span>
+      <div class="cell cell-xfade" data-slot="xfade"></div>
+      <span class="xf-tag tone-b" aria-hidden="true">B</span>
+    </div>
+  </section>
+
+  <section class="deck deck-b tone-b" id="deckB" data-deck="B" aria-label="Deck B">
+    <div class="deck-top">
+      <div class="cell cell-tempo" data-slot="B-tempo"></div>
+      <div class="platter-area"><div class="cell cell-platter" data-slot="B-platter"></div></div>
+    </div>
+    <div class="deck-pads">
+      <div class="cell cell-pad" data-slot="B-pad-play"></div>
+      <div class="cell cell-pad" data-slot="B-pad-cue"></div>
+      <div class="cell cell-pad" data-slot="B-pad-sync"></div>
+      <div class="cell cell-pad" data-slot="B-pad-loop"></div>
+      <div class="cell cell-pad" data-slot="B-pad-hot-0"></div>
+      <div class="cell cell-pad" data-slot="B-pad-hot-1"></div>
+      <div class="cell cell-pad" data-slot="B-pad-hot-2"></div>
+      <div class="cell cell-pad" data-slot="B-pad-hot-3"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Dock: display-only (mouse-operable), below the reach line. -->
+<footer id="dock" aria-label="Track info">
+  <div class="dock-deck tone-a" id="dockA" data-deck="A">
+    <div class="dock-info">
+      <div class="dock-line1">
+        <span class="badge">A</span>
+        <span class="title" id="titleA">No track</span>
+      </div>
+      <div class="dock-line2">
+        <span class="stat"><b id="bpmA">—</b><small>BPM</small></span>
+        <span class="stat"><b id="tempoA">±0.0%</b></span>
+        <span class="stat stat-time"><b id="timeA">0:00</b><small id="remainA">-0:00</small></span>
+        <button type="button" class="btn load" id="loadA" data-load="A" aria-haspopup="menu">LOAD</button>
+      </div>
+    </div>
+    <div class="dock-wave">
+      <canvas class="wave" id="waveA"></canvas>
+      <div class="overview" id="ovA" title="Click to jump">
+        <canvas id="ovCanvasA"></canvas>
+        <div class="ov-fill" id="ovFillA"></div>
+      </div>
+    </div>
+  </div>
+  <div class="dock-deck tone-b" id="dockB" data-deck="B">
+    <div class="dock-info">
+      <div class="dock-line1">
+        <span class="badge">B</span>
+        <span class="title" id="titleB">No track</span>
+      </div>
+      <div class="dock-line2">
+        <span class="stat"><b id="bpmB">—</b><small>BPM</small></span>
+        <span class="stat"><b id="tempoB">±0.0%</b></span>
+        <span class="stat stat-time"><b id="timeB">0:00</b><small id="remainB">-0:00</small></span>
+        <button type="button" class="btn load" id="loadB" data-load="B" aria-haspopup="menu">LOAD</button>
+      </div>
+    </div>
+    <div class="dock-wave">
+      <canvas class="wave" id="waveB"></canvas>
+      <div class="overview" id="ovB" title="Click to jump">
+        <canvas id="ovCanvasB"></canvas>
+        <div class="ov-fill" id="ovFillB"></div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<canvas id="hands" aria-hidden="true"></canvas>
+
+<!-- ───────────── Overlays ───────────── -->
+<div id="notice" class="notice" role="alert" hidden>
+  <p id="noticeText"></p>
+  <button type="button" class="btn" id="noticeAction" hidden>Try again</button>
+  <button type="button" class="btn ghost icon" id="noticeClose" aria-label="Dismiss">✕</button>
+</div>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<div id="loadMenu" class="menu" role="menu" hidden>
+  <div class="menu-head" id="loadMenuHead">Load into deck A</div>
+  <div class="menu-items" id="loadMenuItems"></div>
+  <div class="menu-sep"></div>
+  <button type="button" class="menu-item" role="menuitem" id="loadMenuFile">Open audio file…<small>MP3, WAV, M4A, OGG</small></button>
+</div>
+<div id="recMenu" class="menu rec-menu" role="menu" hidden>
+  <div class="menu-head">Record your set</div>
+  <button type="button" class="menu-item" role="menuitem" id="recScreen">Screen + sound<small>video of this tab</small></button>
+  <button type="button" class="menu-item" role="menuitem" id="recAudio">Sound only<small>just the music</small></button>
+  <div class="menu-sep"></div>
+  <p class="menu-note">Press REC again to stop. The file goes to your Downloads folder.</p>
+</div>
+
+<input type="file" id="fileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.opus,.webm" hidden>
+
+<div id="dropZones" aria-hidden="true">
+  <div class="drop-half tone-a" data-deck="A"><span>Drop to load on <b>deck A</b></span></div>
+  <div class="drop-half tone-b" data-deck="B"><span>Drop to load on <b>deck B</b></span></div>
+</div>
+
+<aside id="settings" class="panel" aria-label="Settings" hidden>
+  <div class="panel-head">
+    <h2>Settings</h2>
+    <button type="button" class="btn ghost icon" id="settingsClose" aria-label="Close settings">✕</button>
+  </div>
+  <label class="field">
+    <span>Master volume <output id="outMaster"></output></span>
+    <input type="range" id="setMaster" min="0" max="1" step="0.01">
+  </label>
+  <label class="field">
+    <span>Pinch sensitivity <output id="outPinch"></output></span>
+    <input type="range" id="setPinch" min="0.6" max="1.6" step="0.05">
+    <small>Higher = a looser pinch still counts.</small>
+  </label>
+  <label class="field">
+    <span>Tap sensitivity <output id="outTap"></output></span>
+    <input type="range" id="setTap" min="0.6" max="1.6" step="0.05">
+    <small>Higher = a smaller finger flick fires a pad.</small>
+  </label>
+  <label class="field">
+    <span>Camera dimming <output id="outDim"></output></span>
+    <input type="range" id="setDim" min="0" max="0.85" step="0.01">
+  </label>
+  <label class="field check">
+    <input type="checkbox" id="setSkeleton">
+    <span>Show hand skeleton</span>
+  </label>
+  <div class="panel-actions">
+    <button type="button" class="btn" id="camToggle">Turn camera on</button>
+    <button type="button" class="btn ghost" id="settingsReset">Reset</button>
+  </div>
+  <p class="panel-foot">Press <kbd>D</kbd> for the debug panel.</p>
+</aside>
+
+<pre id="debug" hidden></pre>
+
+<!-- Start screen; reopened as the gesture guide by Help. -->
+<div id="guide" class="overlay" data-mode="start" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="guide-inner">
+    <h1 id="guideTitle" class="guide-title"><span class="brand-a">OZGE</span> <span class="brand-b">DJ</span> SET</h1>
+    <p class="guide-sub">Two decks, a mixer and your own two hands. The camera is your controller.</p>
+
+    <ol class="gestures">
+      <li class="gesture tone-a">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="30" cy="34" r="22" class="g-line"/>
+          <circle cx="30" cy="34" r="15" class="g-faint"/>
+          <circle cx="30" cy="34" r="4" class="g-fill"/>
+          <path d="M8 18 A28 28 0 0 1 30 6" class="g-arrow"/>
+          <path d="M26 2 L31 6 L26 10" class="g-arrow"/>
+          <g class="g-hand" transform="translate(30 30) rotate(-12)">
+            <rect x="-9" y="2" width="20" height="18" rx="7"/>
+            <path d="M-6 6 V-9 M-1 4 V-13 M4 4 V-12 M9 6 V-7 M-8 14 L-15 6"/>
+          </g>
+        </svg>
+        <h3>Scratch</h3>
+        <p>Lay your <b>fingers</b> on a record and slide or turn your hand.</p>
+      </li>
+      <li class="gesture tone-b">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="36" r="16" class="g-line"/>
+          <path d="M32 36 L32 23" class="g-line"/>
+          <path d="M12 22 A22 22 0 0 1 22 13" class="g-arrow"/>
+          <path d="M52 22 A22 22 0 0 0 42 13" class="g-arrow"/>
+          <path d="M18 10 L22 13 L18 17 M46 10 L42 13 L46 17" class="g-arrow"/>
+          <path d="M22 60 C22 48 26 40 32 38 M42 60 C42 50 38 42 33 39" class="g-finger"/>
+          <circle cx="32.5" cy="38.5" r="3" class="g-dot"/>
+        </svg>
+        <h3>Turn a knob</h3>
+        <p><b>Pinch</b> a knob, then twist your hand or circle it round like a crank.</p>
+      </li>
+      <li class="gesture tone-a">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="29" y="6" width="6" height="52" rx="3" class="g-faint"/>
+          <rect x="21" y="26" width="22" height="12" rx="4" class="g-line"/>
+          <path d="M50 14 V50 M46 18 L50 13 L54 18 M46 46 L50 51 L54 46" class="g-arrow"/>
+          <path d="M8 46 C14 40 22 36 30 33 M10 22 C18 26 24 30 30 32" class="g-finger"/>
+          <circle cx="31" cy="32.5" r="3" class="g-dot"/>
+        </svg>
+        <h3>Slide a fader</h3>
+        <p><b>Pinch</b> a fader and slide it.</p>
+      </li>
+      <li class="gesture tone-cue">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="10" y="40" width="44" height="18" rx="5" class="g-line"/>
+          <path d="M32 8 V30" class="g-finger"/>
+          <path d="M24 30 L32 38 L40 30" class="g-arrow"/>
+          <path d="M18 16 L22 20 M46 16 L42 20 M14 28 H19 M45 28 H50" class="g-faint-line"/>
+        </svg>
+        <h3>Tap a pad</h3>
+        <p><b>Flick your index finger</b> down at a pad, like pressing a button in the air.</p>
+      </li>
+      <li class="gesture tone-b">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="6" y="8" width="52" height="50" rx="7" class="g-line"/>
+          <path d="M32 12 V54 M10 33 H54" class="g-faint-line"/>
+          <path d="M8 52 L14 46 L20 50 L26 40 L32 44 L38 34 L44 38 L50 26 L56 30" class="g-faint-line"/>
+          <g class="g-hand" transform="translate(36 28)">
+            <rect x="-9" y="2" width="20" height="18" rx="7"/>
+            <path d="M-6 6 V-9 M-1 4 V-13 M4 4 V-12 M9 6 V-7 M-8 14 L-15 6"/>
+          </g>
+        </svg>
+        <h3>FX pad</h3>
+        <p>Hold an <b>open hand</b> in the FX pad: sideways filters, up adds echo.</p>
+      </li>
+    </ol>
+
+    <p class="seat-hint"><b>Before you start:</b> sit back about 60&nbsp;cm (an arm's length) so both hands fit in the picture, and put some light on your hands.</p>
+    <p class="seat-hint rec-hint">Want to keep a performance? Press <b>REC</b> at the top right to record it with sound.</p>
+
+    <div class="guide-actions" data-for="start">
+      <button type="button" class="btn primary big" id="btnStartCam" disabled>Start with camera</button>
+      <button type="button" class="btn big" id="btnStartMouse" disabled>Use mouse only</button>
+    </div>
+    <div class="guide-actions" data-for="help">
+      <button type="button" class="btn primary big" id="guideClose">Back to the decks</button>
+    </div>
+    <p class="guide-error" id="startError" role="alert" hidden></p>
+    <p class="guide-foot" id="guideFoot">Loading…</p>
+  </div>
+</div>
+
+<script>
+  // If the app's modules fail to load, say so instead of leaving a dead start screen.
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (window.__djReady) return;
+      var err = document.getElementById('startError');
+      var foot = document.getElementById('guideFoot');
+      if (foot) foot.textContent = '';
+      if (!err) return;
+      err.hidden = false;
+      err.textContent = location.protocol === 'file:'
+        ? 'This page has to be opened from a web address (http:// or https://), not as a file. Please use the link you were sent.'
+        : 'The app could not load. Please reload the page, and use a current Chrome or Edge.';
+    }, 1500);
+  });
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

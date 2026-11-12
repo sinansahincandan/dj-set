@@ -1,0 +1,886 @@
+/* DJ rig controls (owner: CONTROLS). Uses the design tokens defined on :root in styles.css.
+   A deck section sets --c to its deck colour; a control given an explicit `color` sets it on
+   itself. Every control fills the box the shell gives it: give grid cells a definite size.
+   States: .hover (a hand is on / about to act on it), .held (captured), .lit, .hit (flash). */
+
+.ctl {
+  --cc: var(--c, var(--a, #2ee6ff));
+  --cc-soft: color-mix(in srgb, var(--cc) 22%, transparent);
+  --cc-mid: color-mix(in srgb, var(--cc) 52%, transparent);
+  --ink: var(--text, #eef1f8);
+  --dim: var(--muted, rgba(238, 241, 248, 0.62));
+  --edge: var(--line, rgba(255, 255, 255, 0.16));
+  --glass: var(--panel, rgba(12, 14, 24, 0.52));
+  --glass-strong: var(--panel-strong, rgba(12, 14, 24, 0.78));
+  --shade: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 8px rgba(0, 0, 0, 0.55);
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font, system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+.ctl *,
+.ctl *::before,
+.ctl *::after {
+  box-sizing: border-box;
+}
+
+/* ─── Pad ─────────────────────────────────────────────────────────────────── */
+
+.pad {
+  container-type: size;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  overflow: hidden;
+  border-radius: var(--radius, 14px);
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s, transform 0.08s;
+}
+/* deck-colour accent strip */
+.pad::before {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 0;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--cc-mid);
+  transition: background-color 0.12s, box-shadow 0.12s;
+}
+/* hit flash */
+.pad::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 55%, rgba(255, 255, 255, 0.85), var(--cc) 45%, transparent 80%);
+}
+.pad-label {
+  position: relative;
+  z-index: 1;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: clamp(12px, min(30cqh, 17cqw), 32px);
+  text-shadow: var(--shade);
+  white-space: nowrap;
+}
+.pad-sub {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(9px, min(13cqh, 9cqw), 13px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  text-shadow: var(--shade);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 92%;
+}
+.pad.no-sub .pad-sub {
+  display: none;
+}
+
+.pad.hover {
+  border-color: var(--cc);
+  background-color: color-mix(in srgb, var(--cc) 14%, var(--glass-strong));
+  box-shadow: 0 0 0 2px var(--cc-mid), 0 0 22px var(--cc-soft), inset 0 0 18px var(--cc-soft);
+}
+.pad.hover::before {
+  background: var(--cc);
+  box-shadow: 0 0 10px var(--cc);
+}
+.pad.lit {
+  border-color: var(--cc);
+  background-color: color-mix(in srgb, var(--cc) 62%, transparent);
+  box-shadow: 0 0 26px var(--cc-mid), inset 0 0 22px rgba(255, 255, 255, 0.22);
+}
+.pad.lit::before {
+  background: rgba(255, 255, 255, 0.9);
+}
+.pad.lit .pad-label,
+.pad.lit .pad-sub {
+  color: var(--bg, #07080d);
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
+}
+.pad.lit.hover {
+  box-shadow: 0 0 0 2px #fff, 0 0 30px var(--cc);
+}
+.pad.hit {
+  animation: ctl-pad-press 0.2s ease-out;
+}
+.pad.hit::after {
+  animation: ctl-pad-hit 0.34s ease-out;
+}
+@keyframes ctl-pad-press {
+  0% { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+@keyframes ctl-pad-hit {
+  0% { opacity: 0.95; }
+  100% { opacity: 0; }
+}
+
+/* ─── Knob ────────────────────────────────────────────────────────────────── */
+
+.knob {
+  container-type: size;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.knob-well {
+  container-type: size;
+  position: relative;
+  flex: 1 1 0;
+  min-height: 36px;
+  width: 100%;
+  display: grid;
+  place-items: center;
+}
+.knob-dial {
+  position: relative;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(8, 9, 14, 0.5) 55%, rgba(8, 9, 14, 0.15) 72%, transparent 73%);
+  transition: box-shadow 0.12s, transform 0.12s;
+}
+.knob-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.knob-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+.knob-glow {
+  fill: none;
+  stroke: var(--cc);
+  stroke-width: 15;
+  stroke-linecap: round;
+  opacity: 0.16;
+  transition: opacity 0.12s;
+}
+.knob-fill {
+  fill: none;
+  stroke: var(--cc);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+.knob-tick {
+  fill: var(--cue, #ffd23f);
+  opacity: 0.75;
+}
+.knob-cap {
+  position: absolute;
+  inset: 21%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, rgba(70, 77, 104, 0.95), rgba(16, 18, 30, 0.95) 68%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transform: rotate(calc(-135deg + var(--v, 0.5) * 270deg));
+}
+.knob-pointer {
+  position: absolute;
+  left: 44%;
+  width: 12%;
+  top: 6%;
+  height: 36%;
+  border-radius: 99px;
+  background: var(--ink);
+  box-shadow: 0 0 6px var(--cc), 0 0 2px var(--cc);
+}
+.knob-value {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: calc(min(100cqw, 100cqh) * 0.2);
+  font-weight: 800;
+  color: var(--ink);
+  text-shadow: var(--shade);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.knob-label {
+  flex: none;
+  font-size: clamp(10px, min(12cqw, 10cqh), 15px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-shadow: var(--shade);
+  white-space: nowrap;
+}
+
+/* Crank spoke: a faint lever from the dial centre to the pinch point while cranking. Absolutely
+   positioned with pointer-events off, so it changes neither layout nor the hit shape; the well
+   and the knob do not clip, and a held knob is raised above its neighbours so it is not hidden. */
+.knob-spoke {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--sl, 0px);
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, var(--cc) 35%, #fff);
+  transform-origin: 0 50%;
+  transform: rotate(var(--sa, 0rad));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.knob-spoke::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 6px var(--cc);
+}
+.knob.held {
+  z-index: 4;
+}
+.knob.held.cranking .knob-spoke {
+  opacity: calc(var(--sw, 0) * 0.42);
+}
+
+.knob.hover .knob-dial {
+  box-shadow: 0 0 0 2px var(--cc-mid), 0 0 22px var(--cc-soft);
+}
+.knob.hover .knob-label {
+  color: var(--ink);
+}
+.knob.held .knob-dial {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px var(--cc), 0 0 30px var(--cc-mid);
+}
+.knob.held .knob-glow {
+  opacity: 0.5;
+}
+.knob.held .knob-pointer {
+  background: #fff;
+  box-shadow: 0 0 10px var(--cc), 0 0 3px #fff;
+}
+.knob.held .knob-value {
+  opacity: 1;
+}
+.knob.held .knob-label {
+  color: var(--cc);
+}
+
+/* ─── Fader ───────────────────────────────────────────────────────────────── */
+
+.fader {
+  container-type: size;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fader-track {
+  container-type: size;
+  position: relative;
+  flex: 1 1 0;
+  min-height: 28px;
+  border-radius: var(--radius, 14px);
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.fader-v .fader-track {
+  --cap: clamp(22px, 13cqh, 50px);
+}
+.fader-h .fader-track {
+  --cap: clamp(22px, 10cqw, 64px);
+}
+
+/* level meter behind vertical faders, driven by --level (0..1) */
+.fader-meter {
+  position: absolute;
+  left: 26%;
+  right: 26%;
+  top: calc(var(--cap) / 2);
+  bottom: calc(var(--cap) / 2);
+  border-radius: 6px;
+  opacity: 0.4;
+  background: linear-gradient(to top, var(--ok, #5dffa0) 0%, var(--ok, #5dffa0) 55%, var(--cue, #ffd23f) 80%, #ff4d4d 100%);
+  clip-path: inset(calc((1 - var(--level, 0)) * 100%) 0 0 0 round 6px);
+}
+.fader.clip .fader-meter {
+  opacity: 0.7;
+}
+
+.fader-ticks {
+  position: absolute;
+  --tick: rgba(255, 255, 255, 0.2);
+}
+.fader-v .fader-ticks {
+  left: 20%;
+  right: 20%;
+  top: calc(var(--cap) / 2);
+  bottom: calc(var(--cap) / 2);
+  background: repeating-linear-gradient(to bottom, var(--tick) 0 1px, transparent 1px 10%);
+  border-bottom: 1px solid var(--tick);
+}
+.fader-h .fader-ticks {
+  top: 22%;
+  bottom: 22%;
+  left: calc(var(--cap) / 2);
+  right: calc(var(--cap) / 2);
+  background: repeating-linear-gradient(to right, var(--tick) 0 1px, transparent 1px 10%);
+  border-right: 1px solid var(--tick);
+}
+
+.fader-groove {
+  position: absolute;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.fader-v .fader-groove {
+  left: 50%;
+  width: clamp(4px, 8cqw, 8px);
+  transform: translateX(-50%);
+  top: calc(var(--cap) / 2);
+  bottom: calc(var(--cap) / 2);
+}
+.fader-h .fader-groove {
+  top: 50%;
+  height: clamp(4px, 8cqh, 8px);
+  transform: translateY(-50%);
+  left: calc(var(--cap) / 2);
+  right: calc(var(--cap) / 2);
+}
+.fader-fill {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--v, 0) * 100%);
+  background: var(--cc);
+  box-shadow: 0 0 8px var(--cc);
+}
+.fader-v.unipolar .fader-fill {
+  display: block;
+}
+
+.fader-detent {
+  position: absolute;
+  background: var(--cue, #ffd23f);
+  opacity: 0.8;
+  border-radius: 2px;
+}
+.fader-v .fader-detent {
+  left: 14%;
+  right: 14%;
+  height: 2px;
+  top: calc(var(--cap) / 2 + (1 - var(--d, 0.5)) * (100% - var(--cap)) - 1px);
+}
+.fader-h .fader-detent {
+  top: 14%;
+  bottom: 14%;
+  width: 2px;
+  left: calc(var(--cap) / 2 + var(--d, 0.5) * (100% - var(--cap)) - 1px);
+}
+
+.fader-cap {
+  position: absolute;
+  border-radius: 9px;
+  background: linear-gradient(rgba(58, 64, 90, 0.95), rgba(18, 20, 32, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.fader-cap::after {
+  content: '';
+  position: absolute;
+  border-radius: 2px;
+  background: var(--cc);
+  box-shadow: 0 0 8px var(--cc);
+}
+.fader-v .fader-cap {
+  left: 12%;
+  right: 12%;
+  height: var(--cap);
+  top: calc((1 - var(--v, 0.5)) * (100% - var(--cap)));
+}
+.fader-v .fader-cap::after {
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+}
+.fader-h .fader-cap {
+  top: 8%;
+  bottom: 8%;
+  width: var(--cap);
+  left: calc(var(--v, 0.5) * (100% - var(--cap)));
+}
+.fader-h .fader-cap::after {
+  top: 12%;
+  bottom: 12%;
+  left: 50%;
+  width: 3px;
+  margin-left: -1.5px;
+}
+
+.fader-text {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.5em;
+  font-size: clamp(10px, min(12cqw, 14cqh), 15px);
+  text-shadow: var(--shade);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fader-label {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+.fader-value {
+  font-weight: 800;
+  color: var(--cc);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.fader.hover .fader-track {
+  border-color: var(--cc-mid);
+  box-shadow: 0 0 0 1px var(--cc-mid), 0 0 18px var(--cc-soft);
+}
+.fader.hover .fader-cap {
+  border-color: var(--cc);
+  box-shadow: 0 0 0 2px var(--cc-mid), 0 0 16px var(--cc-mid);
+}
+.fader.hover .fader-label {
+  color: var(--ink);
+}
+.fader.held .fader-track {
+  border-color: var(--cc);
+  box-shadow: 0 0 0 1px var(--cc), 0 0 24px var(--cc-mid);
+}
+.fader.held .fader-cap {
+  border-color: #fff;
+  background-color: var(--cc);
+  background-image: linear-gradient(color-mix(in srgb, var(--cc) 70%, #fff), var(--cc));
+  box-shadow: 0 0 0 3px var(--cc-mid), 0 0 26px var(--cc);
+}
+.fader.held .fader-cap::after {
+  background: #fff;
+}
+.fader.held .fader-value,
+.fader.hover .fader-value {
+  opacity: 1;
+}
+.fader.held .fader-label {
+  color: var(--cc);
+}
+/* A vertical fader's cell is too narrow for "LABEL value" side by side: the hidden value
+   still took up room and pushed the label out of its box. Swap them in place instead. */
+.fader-v .fader-text {
+  position: relative;
+}
+.fader-v .fader-label {
+  transition: opacity 0.12s;
+}
+.fader-v .fader-value {
+  position: absolute;
+  inset: 0;
+  text-align: center;
+}
+.fader-v.hover .fader-label,
+.fader-v.held .fader-label {
+  opacity: 0;
+}
+
+/* ─── Platter ─────────────────────────────────────────────────────────────── */
+
+.platter {
+  container-type: size;
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+}
+.platter-wrap {
+  position: relative;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  border-radius: 50%;
+}
+.platter-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--cc-mid);
+  background: radial-gradient(circle, transparent 66%, rgba(255, 255, 255, 0.05) 69%, rgba(8, 9, 14, 0.4) 72%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 0 18px var(--cc-soft), inset 0 0 16px rgba(0, 0, 0, 0.6);
+  transition: border-color 0.12s, box-shadow 0.15s;
+}
+.platter-disc {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  will-change: transform;
+  background: radial-gradient(circle, rgba(16, 17, 24, 0.5) 30%, rgba(6, 7, 11, 0.62) 72%, rgba(14, 15, 22, 0.66) 100%);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.platter-grooves {
+  position: absolute;
+  inset: 3%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 47%, rgba(255, 255, 255, 0.1) 47.5%, transparent 48.5%),
+    radial-gradient(circle, transparent 66%, rgba(255, 255, 255, 0.08) 66.5%, transparent 67.5%),
+    repeating-radial-gradient(circle, rgba(255, 255, 255, 0.055) 0 1px, transparent 1px 3px);
+  -webkit-mask: radial-gradient(circle, transparent 34%, #000 35%);
+  mask: radial-gradient(circle, transparent 34%, #000 35%);
+}
+/* rotation marker: a bright radial line from the label to the rim */
+.platter-marker {
+  position: absolute;
+  left: 50%;
+  top: 1.5%;
+  width: 2.4%;
+  height: 31%;
+  transform: translateX(-50%);
+  border-radius: 99px;
+  background: linear-gradient(to bottom, #fff, var(--cc));
+  box-shadow: 0 0 8px var(--cc);
+  opacity: 0.85;
+}
+.platter-label {
+  position: absolute;
+  inset: 32%;
+  border-radius: 50%;
+  color: var(--bg, #07080d);
+  background: radial-gradient(circle, color-mix(in srgb, var(--cc) 92%, #fff) 0 14%, var(--cc) 15%, color-mix(in srgb, var(--cc) 62%, #000) 100%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35), 0 0 22px var(--cc-mid);
+  opacity: 0.9;
+  overflow: hidden;
+}
+/* title above the spindle, deck letter below it; both turn with the record */
+.platter-title {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: 59%;
+  text-align: center;
+  font-size: calc(min(100cqw, 100cqh) * 0.04);
+  font-weight: 800;
+  line-height: 1.1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.platter-id {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 60%;
+  text-align: center;
+  font-size: calc(min(100cqw, 100cqh) * 0.05);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+}
+/* notch on the label edge, in line with the marker */
+.platter-notch {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 10%;
+  height: 12%;
+  transform: translateX(-50%);
+  border-radius: 0 0 99px 99px;
+  background: rgba(255, 255, 255, 0.92);
+}
+.platter-sheen {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 20deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.07) 25deg,
+    transparent 55deg,
+    transparent 180deg,
+    rgba(255, 255, 255, 0.05) 205deg,
+    transparent 235deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 35%, #000 36%);
+  mask: radial-gradient(circle, transparent 35%, #000 36%);
+}
+.platter-spindle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4%;
+  height: 4%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff, #8a90a6 60%, #3a3f52);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.platter-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -1%;
+  transform: translate(-50%, 40%);
+  padding: 0.25em 0.8em;
+  border-radius: 99px;
+  font-size: clamp(10px, calc(min(100cqw, 100cqh) * 0.045), 15px);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--bg, #07080d);
+  background: var(--cc);
+  box-shadow: 0 0 16px var(--cc);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.platter.playing .platter-marker {
+  opacity: 1;
+  box-shadow: 0 0 12px var(--cc), 0 0 3px #fff;
+}
+.platter.hover .platter-ring {
+  border-color: var(--cc);
+  box-shadow: 0 0 0 2px var(--cc-mid), 0 0 32px var(--cc-mid), inset 0 0 18px var(--cc-soft);
+}
+.platter.held .platter-ring,
+.platter.scratching .platter-ring {
+  border: 3px solid var(--cc);
+  box-shadow: 0 0 0 5px var(--cc-soft), 0 0 46px var(--cc), inset 0 0 26px var(--cc-mid);
+}
+.platter.held .platter-disc {
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), inset 0 0 40px var(--cc-soft), inset 0 0 0 1px var(--cc-mid);
+}
+.platter.held .platter-badge {
+  opacity: 1;
+}
+
+/* ─── FX pad ──────────────────────────────────────────────────────────────── */
+
+.fxpad {
+  --fa: var(--a, #2ee6ff);
+  --fb: var(--b, #ff4d9d);
+  --fmix: color-mix(in srgb, var(--fa) 50%, var(--fb));
+  container-type: size;
+  min-height: 72px;
+  overflow: hidden;
+  border-radius: var(--radius, 14px);
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.12s, box-shadow 0.15s;
+}
+.fxpad-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.fxpad-zone {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* dead zone band (filter off) */
+.fxpad-zone::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc((0.5 - var(--dead, 0.06)) * 100%);
+  width: calc(var(--dead, 0.06) * 200%);
+  background: rgba(255, 255, 255, 0.035);
+  border-left: 1px dashed rgba(255, 255, 255, 0.14);
+  border-right: 1px dashed rgba(255, 255, 255, 0.14);
+}
+/* echo floor */
+.fxpad-zone::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--floor, 0.15) * 100%);
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+}
+.fxpad-title {
+  position: absolute;
+  left: 3%;
+  top: 7%;
+  font-size: clamp(11px, 13cqh, 18px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  background: linear-gradient(90deg, var(--fa), var(--fb));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.fxpad-hint {
+  position: absolute;
+  font-size: clamp(9px, min(9cqh, 2.6cqw), 13px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  text-shadow: var(--shade);
+  white-space: pre;
+  pointer-events: none;
+}
+.fxpad-hint-x {
+  left: 0;
+  right: 0;
+  bottom: 4%;
+  text-align: center;
+}
+.fxpad-hint-y {
+  right: 3%;
+  top: 7%;
+}
+.fxpad-readout {
+  position: absolute;
+  left: 50%;
+  top: 7%;
+  transform: translateX(-50%);
+  font-size: clamp(10px, min(11cqh, 3cqw), 15px);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  text-shadow: var(--shade);
+  white-space: pre;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.fxpad-cross {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+.fxpad-cross-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--px, 0.5) * 100%);
+  width: 1px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.75), transparent);
+}
+.fxpad-cross-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((1 - var(--py, 0)) * 100%);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+}
+.fxpad-dot {
+  position: absolute;
+  left: calc(var(--px, 0.5) * 100%);
+  top: calc((1 - var(--py, 0)) * 100%);
+  width: clamp(18px, 26cqh, 44px);
+  height: clamp(18px, 26cqh, 44px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: radial-gradient(circle, #fff 0 18%, var(--fmix) 30%, transparent 72%);
+  box-shadow: 0 0 18px var(--fmix), 0 0 4px #fff;
+}
+
+.fxpad.hover {
+  border-color: var(--fmix);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fmix) 50%, transparent), 0 0 24px color-mix(in srgb, var(--fmix) 30%, transparent);
+}
+.fxpad.held {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--fa), 0 0 30px color-mix(in srgb, var(--fa) 55%, transparent), 0 0 30px color-mix(in srgb, var(--fb) 45%, transparent), inset 0 0 30px color-mix(in srgb, var(--fmix) 25%, transparent);
+}
+.fxpad.held .fxpad-cross,
+.fxpad.held .fxpad-readout {
+  opacity: 1;
+}
+.fxpad.held .fxpad-hint {
+  color: var(--ink);
+}
+
+/* ─── Mouse hover (camera mode keeps using .hover from the hand) ──────────── */
+
+@media (hover: hover) {
+  .pad:hover:not(.hover):not(.lit) {
+    border-color: var(--cc-mid);
+    background-color: color-mix(in srgb, var(--cc) 8%, var(--glass-strong));
+  }
+  .knob:hover:not(.held) .knob-dial {
+    box-shadow: 0 0 0 1px var(--cc-mid);
+  }
+  .fader:hover:not(.held) .fader-cap {
+    border-color: var(--cc-mid);
+  }
+  .platter:hover:not(.held) .platter-ring {
+    border-color: var(--cc);
+  }
+  .fxpad:hover:not(.held) {
+    border-color: color-mix(in srgb, var(--fmix) 55%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctl,
+  .ctl * {
+    transition: none !important;
+  }
+  .pad.hit {
+    animation: none;
+  }
+  .pad.hit::after {
+    animation-duration: 0.2s;
+  }
+  .knob.held .knob-dial {
+    transform: none;
+  }
+}
