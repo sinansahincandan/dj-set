@@ -3,6 +3,8 @@
 // sound alone. Sound always comes from engine.getRecordStream() (the clean master output),
 // never from the microphone or from tab/system audio capture.
 
+import { flattenMp4Blob } from './mp4fix.js';
+
 const VIDEO_TYPES = [
   // MP4 first: it is what phones and messaging apps play
   'video/mp4;codecs=avc1.640028,mp4a.40.2',
@@ -20,11 +22,18 @@ const AUDIO_TYPES = [
   'audio/webm;codecs=opus',
   'audio/webm',
 ];
-const VIDEO_BPS = 8_000_000;
+const VIDEO_BPS = 5_000_000; // 8 Mbit/s made a 76 s take 72 MB
 const AUDIO_BPS = 192_000;
 const TIMESLICE_MS = 1000;
 /** A take shorter than this holds nothing worth saving. */
 const MIN_TAKE_MS = 250;
+/** Largest picture we record; the tab's aspect ratio is kept inside it. */
+const MAX_W = 1920;
+const MAX_H = 1080;
+/** How long the browser gets to accept the picture size before we record without it. */
+const PIN_TIMEOUT_MS = 2000;
+/** How long rewriting the finished MP4 may take before the take is saved as recorded. */
+const FLATTEN_TIMEOUT_MS = 30_000;
 
 function recError(code, message, cause) {
   const err = new Error(message || code);
@@ -41,6 +50,51 @@ function pickType(list) {
     } catch { /* treat as unsupported */ }
   }
   return '';
+}
+
+/**
+ * Even width and height no larger than MAX_W x MAX_H with the aspect ratio of `w` x `h`
+ * (never enlarged), or null when the size is unknown.
+ */
+function pinnedSize(w, h) {
+  if (!(w > 0 && h > 0)) return null;
+  const scale = Math.min(1, MAX_W / w, MAX_H / h);
+  const even = (x) => Math.max(2, Math.floor((x * scale) / 2) * 2);
+  return { width: even(w), height: even(h) };
+}
+
+/**
+ * Best effort: fix the captured picture to one even size, so it cannot change mid-take (e.g.
+ * when the browser's "sharing this tab" bar appears) and no player meets an odd dimension.
+ * Never throws; when the browser refuses or does not answer in time we record as it delivers.
+ */
+async function pinPictureSize(video) {
+  try {
+    const s = video.getSettings?.() || {};
+    const size = pinnedSize(s.width, s.height);
+    if (!size) return null;
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timed out')), PIN_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([
+        video.applyConstraints({
+          width: { exact: size.width },
+          height: { exact: size.height },
+          frameRate: 30,
+          resizeMode: 'crop-and-scale',
+        }),
+        timeout,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    return size;
+  } catch (err) {
+    console.warn('[dj] could not fix the recording size; recording at the size the browser gives', err);
+    return null;
+  }
 }
 
 function extFor(mime, mode) {
@@ -124,6 +178,7 @@ export class SessionRecorder {
       t1: 0,
       abort: false,
       finished: false,
+      size: null, // { width, height } the picture was fixed to, if the browser accepted it
       done: null,
       resolve: null,
     };
@@ -150,6 +205,7 @@ export class SessionRecorder {
         video = display.getVideoTracks()[0];
         if (!video) throw recError('failed', 'The browser shared no picture.');
         try { video.contentHint = 'motion'; } catch { /* optional */ }
+        take.size = await pinPictureSize(video); // never throws
         if (take.abort || video.readyState === 'ended') throw recError('cancelled', 'Recording was stopped before it started.');
       }
 
@@ -256,27 +312,53 @@ export class SessionRecorder {
       take.rec.onerror = null;
     }
     const mime = take.mime || take.chunks[0]?.type || (take.mode === 'audio' ? 'audio/webm' : 'video/webm');
-    const blob = new Blob(take.chunks, { type: mime.split(';')[0] });
+    const type = mime.split(';')[0];
+    const raw = new Blob(take.chunks, { type });
     take.chunks = [];
     const durationMs = Math.max(0, take.t1 - take.t0);
-    const result = {
-      blob,
-      mime,
-      ext: extFor(mime, take.mode),
-      durationMs,
-      mode: take.mode,
-      empty: blob.size === 0 || durationMs < MIN_TAKE_MS,
+    // the take stays 'stopping' (REC disabled, stop() returns the same promise) until it is handed out
+    if (this._take === take) this._set('stopping');
+
+    let handed = false;
+    const handOut = (blob) => {
+      if (handed) return;
+      handed = true;
+      const result = {
+        blob,
+        mime,
+        ext: extFor(mime, take.mode),
+        durationMs,
+        mode: take.mode,
+        empty: blob.size === 0 || durationMs < MIN_TAKE_MS,
+      };
+      if (this._take === take) {
+        this._take = null;
+        this.mode = null;
+        this._set('idle');
+      }
+      take.resolve(result);
+      try {
+        this.onfinish?.(result);
+      } catch (err) {
+        console.error('[dj] recorder onfinish failed', err);
+      }
     };
-    if (this._take === take) {
-      this._take = null;
-      this.mode = null;
-      this._set('idle');
-    }
-    take.resolve(result);
-    try {
-      this.onfinish?.(result);
-    } catch (err) {
-      console.error('[dj] recorder onfinish failed', err);
+
+    if (raw.size && type.toLowerCase().includes('mp4')) {
+      // Chrome writes fragmented MP4, which messaging apps refuse: rewrite it as an ordinary MP4
+      // (no re-encoding; the original is kept when anything about it is unexpected)
+      const timer = setTimeout(() => {
+        console.warn('[dj] rewriting the recording took too long; saving it as recorded');
+        handOut(raw);
+      }, FLATTEN_TIMEOUT_MS);
+      flattenMp4Blob(raw)
+        .then((blob) => (blob && blob.size ? blob : raw), () => raw)
+        .then((blob) => {
+          clearTimeout(timer);
+          handOut(blob);
+        });
+    } else {
+      handOut(raw);
     }
   }
 }
